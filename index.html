@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>UGC Pipeline — Ryan Ahmed-Yahia</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap');
+*{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --bg:#c8bedd;
+  --surface:#d8cfe8;
+  --card:#e4ddf0;
+  --card2:#ede8f5;
+  --border:#b8a8cc;
+  --border2:#c0b0d4;
+  --text:#2e2040;
+  --text2:#7a6a90;
+  --text3:#9a8aaa;
+  --accent1:#6b4fa0;
+  --accent2:#c2622a;
+  --grad:linear-gradient(135deg,#6b4fa0,#c2622a);
+  --font:'DM Sans',sans-serif;
+  --mono:'DM Mono',monospace;
+}
+body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:100vh;}
+a{color:var(--accent1);text-decoration:none;}
+a:hover{color:var(--accent2);}
+input,select,textarea,button{font-family:var(--font);font-size:13px;color:var(--text);}
+button{cursor:pointer;}
+button:active{transform:scale(0.98);}
+
+/* LAYOUT */
+.app{max-width:1200px;margin:0 auto;padding:20px 16px;}
+
+/* TOPBAR */
+.topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:10px;}
+.logo{display:flex;align-items:center;gap:10px;}
+.logo-icon{width:38px;height:38px;border-radius:11px;background:var(--grad);display:flex;align-items:center;justify-content:center;font-size:17px;font-weight:700;color:#f0ece8;}
+.logo-text{font-size:18px;font-weight:600;color:var(--text);letter-spacing:-0.3px;}
+.logo-sub{font-size:11px;color:var(--text2);margin-top:1px;}
+.profile-chip{display:flex;align-items:center;gap:9px;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:7px 13px;}
+.avatar{width:30px;height:30px;border-radius:50%;background:var(--grad);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#f0ece8;flex-shrink:0;}
+.pname{font-size:12px;font-weight:600;color:var(--text);}
+.plinks{font-size:10px;color:var(--text2);}
+.plinks a{color:var(--accent1);}
+
+/* STATUS BAR */
+.status-bar{display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:6px 12px;margin-bottom:14px;font-size:11px;color:var(--text2);}
+.status-dot{width:7px;height:7px;border-radius:50%;background:#4a8a5a;flex-shrink:0;}
+.status-dot.error{background:#904040;}
+.status-dot.loading{background:#c2622a;animation:blink 1s infinite;}
+@keyframes blink{0%,100%{opacity:1;}50%{opacity:0.3;}}
+
+/* TABS */
+.tabs{display:flex;gap:6px;margin-bottom:14px;}
+.tab{padding:7px 18px;border-radius:8px;font-size:12px;font-weight:600;border:1px solid var(--border);background:transparent;cursor:pointer;color:var(--text2);transition:all 0.15s;}
+.tab.active{background:var(--grad);color:#f0ece8;border-color:transparent;}
+.tab:hover:not(.active){border-color:var(--accent1);color:var(--accent1);}
+
+/* METRICS */
+.metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;margin-bottom:14px;}
+.metric{background:var(--surface);border:1px solid var(--border);border-radius:11px;padding:13px 15px;position:relative;overflow:hidden;}
+.metric::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;}
+.m0::before{background:linear-gradient(90deg,#6b4fa0,#957abd);}
+.m1::before{background:linear-gradient(90deg,#c2622a,#d4845a);}
+.m2::before{background:linear-gradient(90deg,#6b4fa0,#c2622a);}
+.m3::before{background:linear-gradient(90deg,#4a8a5a,#72b082);}
+.metric-label{font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:5px;}
+.metric-val{font-size:24px;font-weight:600;color:var(--text);}
+.metric-sub{font-size:10px;color:var(--text3);margin-top:2px;}
+
+/* TOOLBAR */
+.toolbar{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;}
+.search{flex:1;min-width:160px;background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:8px 13px;font-size:13px;color:var(--text);outline:none;}
+.search::placeholder{color:var(--text3);}
+.search:focus{border-color:var(--accent1);}
+.btn-add{background:var(--grad);border:none;border-radius:9px;padding:8px 18px;font-size:13px;font-weight:600;color:#f0ece8;white-space:nowrap;}
+.btn-add:hover{opacity:0.88;}
+
+/* BOARD */
+.board{display:grid;grid-template-columns:repeat(4,1fr);gap:9px;align-items:start;}
+@media(max-width:800px){.board{grid-template-columns:repeat(2,1fr);}.metrics{grid-template-columns:repeat(2,1fr);}}
+@media(max-width:480px){.board{grid-template-columns:1fr;}.metrics{grid-template-columns:repeat(2,1fr);}}
+.col-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:7px;}
+.col-label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:0.07em;color:var(--text2);}
+.col-count{background:var(--border2);border-radius:999px;padding:1px 7px;font-size:10px;color:#5a4a70;}
+.col{background:var(--surface);border:1px solid var(--border);border-radius:11px;padding:9px;min-height:160px;}
+.card{background:var(--card);border:1px solid var(--border2);border-radius:8px;padding:10px 12px;margin-bottom:7px;cursor:pointer;transition:border-color 0.15s,transform 0.1s;}
+.card:hover{border-color:var(--accent1);transform:translateY(-1px);}
+.card-brand{font-size:13px;font-weight:600;color:var(--text);}
+.card-niche{font-size:10px;color:var(--text2);margin-top:2px;}
+.card-foot{display:flex;justify-content:space-between;align-items:center;margin-top:7px;}
+.badge{font-size:9px;font-weight:600;padding:2px 8px;border-radius:999px;}
+.badge-cold{background:#ccc4e0;color:#4a3470;border:1px solid #a898c8;}
+.badge-warm{background:#e8d8c8;color:#7a3a10;border:1px solid #c89870;}
+.badge-hot{background:#c8dcc8;color:#2a5a30;border:1px solid #90bc90;}
+.card-date{font-size:9px;color:var(--text3);}
+.add-col-btn{width:100%;background:transparent;border:1px dashed var(--border);border-radius:7px;padding:6px;font-size:11px;color:var(--text3);cursor:pointer;margin-top:2px;}
+.add-col-btn:hover{border-color:var(--accent1);color:var(--accent1);}
+.empty-col{text-align:center;padding:20px 10px;font-size:11px;color:var(--text3);}
+
+/* AGENT */
+.agent-wrap{display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;height:540px;}
+.agent-header{background:var(--card);border-bottom:1px solid var(--border);padding:12px 16px;display:flex;align-items:center;gap:10px;}
+.agent-dot{width:8px;height:8px;border-radius:50%;background:#4a8a5a;flex-shrink:0;}
+.agent-title{font-size:13px;font-weight:600;color:var(--text);}
+.agent-sub{font-size:11px;color:var(--text2);}
+.agent-msgs{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:10px;}
+.msg{max-width:84%;display:flex;flex-direction:column;gap:3px;}
+.msg.user{align-self:flex-end;}
+.msg.agent{align-self:flex-start;}
+.bubble{padding:9px 13px;border-radius:12px;font-size:12px;line-height:1.65;}
+.msg.user .bubble{background:var(--grad);color:#f0ece8;border-radius:12px 12px 3px 12px;}
+.msg.agent .bubble{background:var(--card);color:var(--text);border:1px solid var(--border2);border-radius:12px 12px 12px 3px;}
+.msg-label{font-size:10px;color:var(--text3);padding:0 4px;}
+.msg.user .msg-label{text-align:right;}
+.typing{display:flex;align-items:center;gap:4px;padding:10px 14px;background:var(--card);border:1px solid var(--border2);border-radius:12px 12px 12px 3px;width:fit-content;}
+.dot-pulse span{width:5px;height:5px;border-radius:50%;background:var(--text2);display:inline-block;animation:dp 1.2s infinite;}
+.dot-pulse span:nth-child(2){animation-delay:0.2s;}
+.dot-pulse span:nth-child(3){animation-delay:0.4s;}
+@keyframes dp{0%,80%,100%{opacity:0.3;transform:scale(0.8);}40%{opacity:1;transform:scale(1);}}
+.lead-card{background:var(--bg);border:1px solid var(--border);border-radius:9px;padding:11px 13px;margin-top:6px;}
+.lead-card-brand{font-size:13px;font-weight:600;color:var(--text);}
+.lead-card-meta{font-size:11px;color:var(--text2);margin-top:2px;}
+.lead-card-msg{font-size:11px;color:#4a3a60;background:var(--surface);border-radius:6px;padding:9px;margin-top:8px;line-height:1.6;white-space:pre-wrap;max-height:120px;overflow-y:auto;font-family:var(--mono);}
+.lead-card-actions{display:flex;gap:6px;margin-top:9px;flex-wrap:wrap;}
+.lc-btn{font-size:11px;padding:5px 12px;border-radius:6px;border:1px solid var(--border);background:var(--card);cursor:pointer;color:#5a4a70;}
+.lc-btn:hover{border-color:var(--accent1);color:var(--accent1);}
+.lc-btn.primary{background:var(--grad);color:#f0ece8;border:none;}
+.lc-btn.primary:hover{opacity:0.88;}
+.lc-btn:disabled{opacity:0.5;cursor:not-allowed;}
+.sugs{display:flex;flex-wrap:wrap;gap:6px;padding:10px 14px;border-top:1px solid var(--border2);background:var(--card);}
+.sug{font-size:11px;padding:5px 11px;border-radius:999px;border:1px solid var(--border);background:var(--surface);cursor:pointer;color:#5a4a70;transition:all 0.12s;}
+.sug:hover{border-color:var(--accent1);color:var(--accent1);}
+.agent-input-row{display:flex;gap:8px;padding:12px 14px;border-top:1px solid var(--border);background:var(--card);}
+.agent-input{flex:1;background:var(--surface);border:1px solid var(--border2);border-radius:8px;padding:8px 12px;font-size:12px;color:var(--text);outline:none;}
+.agent-input::placeholder{color:var(--text3);}
+.agent-input:focus{border-color:var(--accent1);}
+.send-btn{background:var(--grad);border:none;border-radius:8px;padding:8px 16px;font-size:12px;font-weight:600;color:#f0ece8;}
+.send-btn:hover{opacity:0.88;}
+.send-btn:disabled{opacity:0.5;cursor:not-allowed;}
+
+/* MODALS */
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(30,20,50,0.5);z-index:300;align-items:center;justify-content:center;padding:16px;}
+.modal-bg.open{display:flex;}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:22px;width:100%;max-width:440px;max-height:90vh;overflow-y:auto;}
+.modal h2{font-size:15px;font-weight:600;color:var(--text);margin-bottom:15px;}
+.field{margin-bottom:11px;}
+.field label{display:block;font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:4px;}
+.field input,.field select,.field textarea{width:100%;background:var(--card);border:1px solid var(--border2);border-radius:7px;padding:8px 11px;font-size:13px;color:var(--text);outline:none;}
+.field input:focus,.field textarea:focus{border-color:var(--accent1);}
+.field textarea{height:65px;resize:vertical;}
+.modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:15px;}
+.btn-cancel{background:transparent;border:1px solid var(--border);border-radius:7px;padding:7px 14px;font-size:12px;color:var(--text2);cursor:pointer;}
+.btn-cancel:hover{border-color:var(--accent1);color:var(--accent1);}
+.btn-save{background:var(--grad);border:none;border-radius:7px;padding:7px 18px;font-size:12px;font-weight:600;color:#f0ece8;cursor:pointer;}
+.btn-save:hover{opacity:0.88;}
+.detail-rows{border-top:1px solid var(--border);padding-top:11px;margin-top:4px;}
+.detail-row{display:flex;justify-content:space-between;font-size:12px;padding:6px 0;border-bottom:1px solid var(--card2);}
+.detail-row:last-child{border-bottom:none;}
+.dk{color:var(--text2);}.dv{color:var(--text);font-weight:500;text-align:right;max-width:58%;word-break:break-word;}
+.outreach-label{font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:0.06em;margin:13px 0 5px;}
+.outreach-box{background:var(--card);border:1px solid var(--border2);border-radius:7px;padding:10px;font-size:11px;color:#4a3a60;line-height:1.65;white-space:pre-wrap;max-height:140px;overflow-y:auto;font-family:var(--mono);}
+.copy-btn{margin-top:7px;font-size:11px;padding:5px 13px;background:#ccc4e0;border:1px solid #a898c4;color:#4a3470;border-radius:7px;cursor:pointer;}
+.copy-btn:hover{background:#bab0d4;}
+.move-label{font-size:10px;color:var(--text2);text-transform:uppercase;letter-spacing:0.06em;margin:13px 0 5px;}
+.move-btns{display:flex;gap:5px;flex-wrap:wrap;}
+.move-btn{font-size:11px;padding:4px 11px;border-radius:999px;border:1px solid var(--border);background:var(--card);cursor:pointer;color:#5a4a70;}
+.move-btn:hover{border-color:var(--accent1);color:var(--accent1);}
+.del-btn{background:transparent;border:1px solid #c8a8a8;border-radius:7px;padding:7px 13px;font-size:12px;color:#904040;cursor:pointer;}
+.del-btn:hover{background:#f0dede;}
+
+/* SETUP SCREEN */
+.setup{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:400px;text-align:center;gap:16px;}
+.setup h2{font-size:20px;font-weight:600;color:var(--text);}
+.setup p{font-size:13px;color:var(--text2);max-width:440px;line-height:1.6;}
+.setup-form{display:flex;flex-direction:column;gap:10px;width:100%;max-width:420px;}
+.setup-form input{background:var(--surface);border:1px solid var(--border);border-radius:9px;padding:10px 14px;font-size:13px;color:var(--text);outline:none;}
+.setup-form input:focus{border-color:var(--accent1);}
+.setup-form input::placeholder{color:var(--text3);}
+.setup-btn{background:var(--grad);border:none;border-radius:9px;padding:11px;font-size:14px;font-weight:600;color:#f0ece8;cursor:pointer;}
+.setup-btn:hover{opacity:0.88;}
+.setup-note{font-size:11px;color:var(--text3);line-height:1.6;}
+.setup-note code{background:var(--card);padding:2px 6px;border-radius:4px;font-family:var(--mono);font-size:10px;color:var(--accent1);}
+</style>
+</head>
+<body>
+
+<div class="app" id="app">
+  <!-- Setup screen shown until Supabase is configured -->
+  <div id="setup-screen" style="display:none;">
+    <div class="topbar">
+      <div class="logo">
+        <div class="logo-icon">R</div>
+        <div><div class="logo-text">UGC Pipeline</div><div class="logo-sub">First-time setup</div></div>
+      </div>
+    </div>
+    <div class="setup">
+      <div class="logo-icon" style="width:52px;height:52px;font-size:22px;border-radius:14px;">R</div>
+      <h2>Connect your database</h2>
+      <p>Paste your Supabase credentials below to connect your CRM. Your leads will be saved permanently and sync across all your devices.</p>
+      <div class="setup-form">
+        <input id="setup-url" type="text" placeholder="Supabase Project URL (https://xxx.supabase.co)">
+        <input id="setup-key" type="text" placeholder="Supabase Anon Key">
+        <button class="setup-btn" onclick="saveConfig()">Connect & Launch CRM</button>
+      </div>
+      <div class="setup-note">
+        Don't have Supabase yet? See the <strong>SETUP GUIDE</strong> file included with this download.<br><br>
+        Your keys are stored only in your browser — never sent anywhere except Supabase.
+      </div>
+    </div>
+  </div>
+
+  <!-- Main CRM (shown once configured) -->
+  <div id="main-screen" style="display:none;">
+    <div class="topbar">
+      <div class="logo">
+        <div class="logo-icon">R</div>
+        <div><div class="logo-text">UGC Pipeline</div><div class="logo-sub">CRM + AI Outreach Agent</div></div>
+      </div>
+      <div class="profile-chip">
+        <div class="avatar">RA</div>
+        <div>
+          <div class="pname">Ryan Ahmed-Yahia</div>
+          <div class="plinks">
+            <a href="https://tiktok.com/@findingdealsusa" target="_blank">@findingdealsusa</a> ·
+            <a href="https://instagram.com/1.hanniba1" target="_blank">@1.hanniba1</a> ·
+            <a href="https://canva.link/emcie7p9eu2em4k" target="_blank">Portfolio</a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="status-bar">
+      <div class="status-dot" id="statusDot"></div>
+      <span id="statusText">Connecting to database...</span>
+      <span style="margin-left:auto;cursor:pointer;color:var(--text3);" onclick="resetConfig()">⚙ Reset connection</span>
+    </div>
+
+    <div class="tabs">
+      <button class="tab active" onclick="switchTab('crm',this)">Pipeline CRM</button>
+      <button class="tab" onclick="switchTab('agent',this)">AI Outreach Agent</button>
+    </div>
+
+    <!-- CRM TAB -->
+    <div id="tab-crm">
+      <div class="metrics" id="metrics"></div>
+      <div class="toolbar">
+        <input class="search" type="text" id="searchInput" placeholder="Search brands or niches..." oninput="renderBoard()">
+        <button class="btn-add" onclick="openAddModal()">+ Add Lead</button>
+      </div>
+      <div class="board" id="board"></div>
+    </div>
+
+    <!-- AGENT TAB -->
+    <div id="tab-agent" style="display:none;">
+      <div class="agent-wrap">
+        <div class="agent-header">
+          <div class="agent-dot"></div>
+          <div>
+            <div class="agent-title">UGC Lead Scout</div>
+            <div class="agent-sub">Finds brands · Writes pitches · Saves to your CRM</div>
+          </div>
+        </div>
+        <div class="agent-msgs" id="agentMsgs">
+          <div class="msg agent">
+            <div class="msg-label">Lead Scout</div>
+            <div class="bubble">Hey Ryan! Tell me what kind of brands you want to target and I'll find real leads + write personalized pitches for each one — ready to copy and send, or add straight to your CRM.<br><br>Try: <em>"Find me 5 beauty brands looking for UGC creators"</em></div>
+          </div>
+        </div>
+        <div class="sugs" id="sugs">
+          <span class="sug" onclick="useSug(this)">Find 5 fitness brands hiring UGC creators</span>
+          <span class="sug" onclick="useSug(this)">Beauty brands looking for TikTok creators</span>
+          <span class="sug" onclick="useSug(this)">Food brands recruiting UGC creators</span>
+          <span class="sug" onclick="useSug(this)">Tech brands seeking UGC ads</span>
+        </div>
+        <div class="agent-input-row">
+          <input class="agent-input" id="agentInput" type="text" placeholder="Ask the agent to find leads..." onkeydown="if(event.key==='Enter')sendMsg()">
+          <button class="send-btn" id="sendBtn" onclick="sendMsg()">Send</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Add Lead Modal -->
+<div class="modal-bg" id="addModal">
+  <div class="modal">
+    <h2>Add new lead</h2>
+    <div class="field"><label>Brand name</label><input id="f-brand" type="text" placeholder="e.g. GymShark"></div>
+    <div class="field"><label>Niche</label><input id="f-niche" type="text" placeholder="e.g. Fitness, Beauty, Food"></div>
+    <div class="field"><label>Contact</label><input id="f-contact" type="text" placeholder="email or @handle"></div>
+    <div class="field"><label>Stage</label>
+      <select id="f-stage">
+        <option value="prospecting">Prospecting</option>
+        <option value="contacted">Contacted</option>
+        <option value="replied">Replied</option>
+        <option value="closed">Closed</option>
+      </select>
+    </div>
+    <div class="field"><label>Temperature</label>
+      <select id="f-temp">
+        <option value="cold">Cold</option>
+        <option value="warm">Warm</option>
+        <option value="hot">Hot</option>
+      </select>
+    </div>
+    <div class="field"><label>Notes</label><textarea id="f-notes" placeholder="Any context about this brand..."></textarea></div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="closeModal('addModal')">Cancel</button>
+      <button class="btn-save" onclick="submitAddLead()">Add lead</button>
+    </div>
+  </div>
+</div>
+
+<!-- Detail Modal -->
+<div class="modal-bg" id="detailModal">
+  <div class="modal" style="max-width:460px;">
+    <h2 id="d-title"></h2>
+    <div class="detail-rows" id="d-rows"></div>
+    <div class="outreach-label">Personalized outreach message</div>
+    <div class="outreach-box" id="d-outreach"></div>
+    <button class="copy-btn" onclick="copyOutreach()">Copy message</button>
+    <div class="move-label">Move to stage</div>
+    <div class="move-btns" id="d-move"></div>
+    <div class="modal-actions" style="margin-top:14px;">
+      <button class="del-btn" onclick="deleteLead()">Delete lead</button>
+      <button class="btn-cancel" onclick="closeModal('detailModal')">Close</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const STAGES=['prospecting','contacted','replied','closed'];
+const SLABELS={prospecting:'Prospecting',contacted:'Contacted',replied:'Replied',closed:'Closed'};
+const ME={name:'Ryan Ahmed-Yahia',email:'ryanhasit9@gmail.com',tt:'@findingdealsusa',ig:'@1.hanniba1',portfolio:'https://canva.link/emcie7p9eu2em4k'};
+
+let supabase=null, leads=[], selectedId=null, agentHistory=[], isThinking=false;
+
+/* ── CONFIG ── */
+function saveConfig(){
+  const url=document.getElementById('setup-url').value.trim();
+  const key=document.getElementById('setup-key').value.trim();
+  if(!url||!key){alert('Please fill in both fields.');return;}
+  localStorage.setItem('sb_url',url);
+  localStorage.setItem('sb_key',key);
+  initApp();}
+
+function resetConfig(){
+  if(!confirm('Reset Supabase connection? You will need to re-enter your credentials.'))return;
+  localStorage.removeItem('sb_url');
+  localStorage.removeItem('sb_key');
+  location.reload();}
+
+/* ── INIT ── */
+async function initApp(){
+  const url=localStorage.getItem('sb_url');
+  const key=localStorage.getItem('sb_key');
+  if(!url||!key){
+    document.getElementById('setup-screen').style.display='block';
+    document.getElementById('main-screen').style.display='none';
+    return;}
+  document.getElementById('setup-screen').style.display='none';
+  document.getElementById('main-screen').style.display='block';
+  setStatus('loading','Connecting...');
+  try{
+    supabase=window.supabase.createClient(url,key);
+    await ensureTable();
+    await loadLeads();
+    setStatus('ok','Connected — data syncing live');
+  }catch(e){
+    setStatus('error','Connection failed — check your credentials');
+    console.error(e);}}
+
+async function ensureTable(){
+  // Try to select — if it fails the table doesn't exist yet
+  const {error}=await supabase.from('leads').select('id').limit(1);
+  if(error && error.code==='42P01'){
+    // Table missing — show SQL hint
+    setStatus('error','Table missing — see setup guide to create it');}}
+
+async function loadLeads(){
+  const {data,error}=await supabase.from('leads').select('*').order('created_at',{ascending:false});
+  if(error){console.error(error);return;}
+  leads=data||[];
+  render();}
+
+function setStatus(type,msg){
+  const dot=document.getElementById('statusDot');
+  const txt=document.getElementById('statusText');
+  dot.className='status-dot'+(type==='error'?' error':type==='loading'?' loading':'');
+  txt.textContent=msg;}
+
+/* ── CRUD ── */
+async function submitAddLead(){
+  const brand=document.getElementById('f-brand').value.trim();
+  if(!brand)return;
+  const lead={brand,niche:document.getElementById('f-niche').value.trim()||'General',contact:document.getElementById('f-contact').value.trim(),stage:document.getElementById('f-stage').value,temp:document.getElementById('f-temp').value,notes:document.getElementById('f-notes').value.trim()};
+  await saveLead(lead);
+  closeModal('addModal');}
+
+async function saveLead(data){
+  if(supabase){
+    const {data:row,error}=await supabase.from('leads').insert([data]).select().single();
+    if(!error&&row){leads.unshift(row);render();return row;}
+  }
+  // Fallback: local only
+  const row={...data,id:Date.now(),created_at:new Date().toISOString()};
+  leads.unshift(row);render();return row;}
+
+async function updateLeadStage(id,stage){
+  leads=leads.map(l=>l.id===id?{...l,stage}:l);
+  render();
+  if(supabase) await supabase.from('leads').update({stage}).eq('id',id);}
+
+async function deleteLeadById(id){
+  leads=leads.filter(l=>l.id!==id);
+  render();
+  if(supabase) await supabase.from('leads').delete().eq('id',id);}
+
+/* ── UI ── */
+function genMsg(l){
+  return `Hi ${l.brand} team!\n\nMy name is Ryan, a UGC creator specializing in ${l.niche} content. I love what you're building and would love to create authentic, high-converting content for you.\n\nMy work:\n→ TikTok: ${ME.tt}\n→ Instagram: ${ME.ig}\n→ Portfolio: ${ME.portfolio}\n\nLet's connect! Reach me at ${ME.email}.\n\nLooking forward to it,\nRyan`;}
+
+function renderMetrics(){
+  const t=leads.length,hot=leads.filter(l=>l.temp==='hot').length,closed=leads.filter(l=>l.stage==='closed').length,replied=leads.filter(l=>l.stage==='replied').length;
+  document.getElementById('metrics').innerHTML=`
+    <div class="metric m0"><div class="metric-label">Total leads</div><div class="metric-val">${t}</div><div class="metric-sub">All stages</div></div>
+    <div class="metric m1"><div class="metric-label">Hot leads</div><div class="metric-val">${hot}</div><div class="metric-sub">High priority</div></div>
+    <div class="metric m2"><div class="metric-label">Replied</div><div class="metric-val">${replied}</div><div class="metric-sub">Follow up needed</div></div>
+    <div class="metric m3"><div class="metric-label">Closed</div><div class="metric-val">${closed}</div><div class="metric-sub">Deals done</div></div>`;}
+
+function renderBoard(){
+  const q=(document.getElementById('searchInput')||{}).value?.toLowerCase()||'';
+  const f=leads.filter(l=>l.brand?.toLowerCase().includes(q)||l.niche?.toLowerCase().includes(q));
+  document.getElementById('board').innerHTML=STAGES.map(s=>{
+    const cs=f.filter(l=>l.stage===s);
+    return `<div>
+      <div class="col-head"><span class="col-label">${SLABELS[s]}</span><span class="col-count">${cs.length}</span></div>
+      <div class="col">
+        ${cs.length===0?`<div class="empty-col">No leads yet</div>`:''}
+        ${cs.map(l=>`<div class="card" onclick="openDetail('${l.id}')">
+          <div class="card-brand">${l.brand}</div>
+          <div class="card-niche">${l.niche}</div>
+          <div class="card-foot"><span class="badge badge-${l.temp}">${l.temp}</span><span class="card-date">${new Date(l.created_at).toLocaleDateString('en-US',{month:'short',day:'numeric'})}</span></div>
+        </div>`).join('')}
+        <button class="add-col-btn" onclick="openAddModalStage('${s}')">+ Add here</button>
+      </div>
+    </div>`;}).join('');}
+
+function render(){renderMetrics();renderBoard();}
+
+function switchTab(tab,btn){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('tab-crm').style.display=tab==='crm'?'block':'none';
+  document.getElementById('tab-agent').style.display=tab==='agent'?'block':'none';}
+
+function openAddModal(){openAddModalStage('prospecting');}
+function openAddModalStage(stage){
+  ['f-brand','f-niche','f-contact','f-notes'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('f-stage').value=stage;
+  document.getElementById('f-temp').value='cold';
+  document.getElementById('addModal').classList.add('open');}
+function closeModal(id){document.getElementById(id).classList.remove('open');}
+
+function openDetail(id){
+  selectedId=id;
+  const l=leads.find(x=>String(x.id)===String(id));
+  if(!l)return;
+  document.getElementById('d-title').textContent=l.brand;
+  document.getElementById('d-rows').innerHTML=`
+    <div class="detail-row"><span class="dk">Niche</span><span class="dv">${l.niche}</span></div>
+    <div class="detail-row"><span class="dk">Contact</span><span class="dv">${l.contact||'—'}</span></div>
+    <div class="detail-row"><span class="dk">Stage</span><span class="dv">${SLABELS[l.stage]}</span></div>
+    <div class="detail-row"><span class="dk">Temperature</span><span class="dv">${l.temp}</span></div>
+    <div class="detail-row"><span class="dk">Added</span><span class="dv">${new Date(l.created_at).toLocaleDateString()}</span></div>
+    <div class="detail-row"><span class="dk">Notes</span><span class="dv">${l.notes||'—'}</span></div>`;
+  document.getElementById('d-outreach').textContent=genMsg(l);
+  document.getElementById('d-move').innerHTML=STAGES.filter(s=>s!==l.stage).map(s=>`<button class="move-btn" onclick="moveLeadTo('${s}')">${SLABELS[s]}</button>`).join('');
+  document.getElementById('detailModal').classList.add('open');}
+
+async function moveLeadTo(stage){await updateLeadStage(selectedId,stage);closeModal('detailModal');}
+async function deleteLead(){if(!confirm('Delete this lead?'))return;await deleteLeadById(selectedId);closeModal('detailModal');}
+
+function copyOutreach(){
+  navigator.clipboard.writeText(document.getElementById('d-outreach').textContent).then(()=>{
+    const b=document.querySelector('.copy-btn');b.textContent='Copied!';setTimeout(()=>b.textContent='Copy message',2000);});}
+
+/* ── AGENT ── */
+function useSug(el){
+  document.getElementById('agentInput').value=el.textContent;
+  document.getElementById('sugs').style.display='none';
+  sendMsg();}
+
+function appendMsg(role,content){
+  const msgs=document.getElementById('agentMsgs');
+  const div=document.createElement('div');
+  div.className=`msg ${role}`;
+  div.innerHTML=`<div class="msg-label">${role==='user'?'You':'Lead Scout'}</div><div class="bubble">${content}</div>`;
+  msgs.appendChild(div);msgs.scrollTop=msgs.scrollHeight;return div;}
+
+function appendTyping(){
+  const msgs=document.getElementById('agentMsgs');
+  const div=document.createElement('div');
+  div.className='msg agent';div.id='typing-ind';
+  div.innerHTML=`<div class="msg-label">Lead Scout</div><div class="typing"><div class="dot-pulse"><span></span><span></span><span></span></div></div>`;
+  msgs.appendChild(div);msgs.scrollTop=msgs.scrollHeight;}
+
+function removeTyping(){const t=document.getElementById('typing-ind');if(t)t.remove();}
+
+function renderLeadCards(arr){
+  const msgs=document.getElementById('agentMsgs');
+  arr.forEach(l=>{
+    const div=document.createElement('div');
+    div.className='msg agent';
+    const msg=genMsg(l);
+    const safeL=encodeURIComponent(JSON.stringify(l));
+    const safeMsg=encodeURIComponent(msg);
+    div.innerHTML=`<div class="msg-label">Lead Scout</div>
+      <div class="lead-card">
+        <div class="lead-card-brand">${l.brand}</div>
+        <div class="lead-card-meta">${l.niche} · ${l.contact||'No contact found'}</div>
+        <div class="lead-card-msg">${msg}</div>
+        <div class="lead-card-actions">
+          <button class="lc-btn primary" id="add-btn-${l.brand.replace(/\s/g,'')}" onclick="addFromAgent('${safeL}',this)">+ Add to CRM</button>
+          <button class="lc-btn" onclick="copyMsgFromAgent('${safeMsg}',this)">Copy pitch</button>
+        </div>
+      </div>`;
+    msgs.appendChild(div);msgs.scrollTop=msgs.scrollHeight;});}
+
+async function addFromAgent(encoded,btn){
+  const data=JSON.parse(decodeURIComponent(encoded));
+  await saveLead({brand:data.brand,niche:data.niche,contact:data.contact||'',stage:'prospecting',temp:'cold',notes:data.notes||''});
+  btn.textContent='Added!';btn.disabled=true;}
+
+function copyMsgFromAgent(encoded,btn){
+  navigator.clipboard.writeText(decodeURIComponent(encoded)).then(()=>{btn.textContent='Copied!';setTimeout(()=>btn.textContent='Copy pitch',2000);});}
+
+async function sendMsg(){
+  if(isThinking)return;
+  const input=document.getElementById('agentInput');
+  const userMsg=input.value.trim();
+  if(!userMsg)return;
+  input.value='';
+  document.getElementById('sugs').style.display='none';
+  isThinking=true;
+  document.getElementById('sendBtn').disabled=true;
+  appendMsg('user',userMsg);
+  agentHistory.push({role:'user',content:userMsg});
+  appendTyping();
+
+  const sys=`You are an AI lead generation agent for Ryan Ahmed-Yahia, a UGC creator. Find real brands actively looking for UGC creators and generate personalized outreach.
+
+Ryan's info: Name: Ryan Ahmed-Yahia | Email: ryanhasit9@gmail.com | TikTok: @findingdealsusa | Instagram: @1.hanniba1 | Portfolio: https://canva.link/emcie7p9eu2em4k | Niches: All niches
+
+When asked to find leads, use web_search to find REAL brands actively hiring UGC creators. Search "[niche] brands hiring UGC creators 2025" or similar.
+
+After searching, reply with one short intro sentence, then output exactly this and nothing else after it:
+LEADS_JSON:[{"brand":"Name","niche":"Niche","contact":"email or @handle","notes":"specific reason they need UGC"}]
+
+Find 3-5 real specific brands. If the user asks a general question, just answer conversationally — no JSON needed.`;
+
+  try{
+    const res=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({
+        model:'claude-sonnet-4-20250514',
+        max_tokens:1000,
+        system:sys,
+        tools:[{type:'web_search_20250305',name:'web_search'}],
+        messages:agentHistory})});
+    const data=await res.json();
+    const text=data.content.filter(b=>b.type==='text').map(b=>b.text).join('\n');
+    agentHistory.push({role:'assistant',content:data.content});
+    removeTyping();
+    if(text.includes('LEADS_JSON:')){
+      const parts=text.split('LEADS_JSON:');
+      if(parts[0].trim())appendMsg('agent',parts[0].trim());
+      try{renderLeadCards(JSON.parse(parts[1].trim()));}
+      catch(e){appendMsg('agent',text);}
+    } else {
+      appendMsg('agent',text||'Something went wrong. Try again!');}
+  }catch(e){
+    removeTyping();
+    appendMsg('agent','Connection error. Please try again.');}
+  isThinking=false;
+  document.getElementById('sendBtn').disabled=false;}
+
+initApp();
+</script>
+</body>
+</html>
