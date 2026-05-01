@@ -430,7 +430,7 @@ async function sendMsg(){
   appendMsg('user',userMsg);agentHistory.push({role:'user',content:userMsg});appendTyping();
   const sys=`You are an AI lead generation agent for Ryan Ahmed-Yahia, a UGC creator. Find real brands actively looking for UGC creators and generate personalized outreach.\nRyan: Name: Ryan Ahmed-Yahia | Email: ryanhasit9@gmail.com | TikTok: @findingdealsusa | Instagram: @1.hanniba1 | Portfolio: https://canva.link/emcie7p9eu2em4k | Niches: All niches\nWhen asked to find leads, use web_search to find REAL brands actively hiring UGC creators.\nAfter searching, reply with one short intro sentence then output exactly:\nLEADS_JSON:[{"brand":"Name","niche":"Niche","contact":"email or @handle","notes":"reason they need UGC"}]\nFind 3-5 real brands. For general questions just answer conversationally.`;
   try{
-    const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',
+    const res=await fetch('/api/chat',{method:'POST',
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,system:sys,
         tools:[{type:'web_search_20250305',name:'web_search'}],messages:agentHistory})});
