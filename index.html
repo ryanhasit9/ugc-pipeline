@@ -90,7 +90,7 @@ button{cursor:pointer;}button:active{transform:scale(0.98);}
 .lc-btn.primary{background:var(--grad);color:#f0ece8;border:none;}.lc-btn.primary:hover{opacity:0.88;}
 .lc-btn:disabled{opacity:0.5;cursor:not-allowed;}
 .sugs{display:flex;flex-wrap:wrap;gap:6px;padding:10px 14px;border-top:1px solid var(--border2);background:var(--card);}
-.sug{font-size:11px;padding:5px 11px;border-radius:999px;border:1px solid var(--border);background:var(--surface);cursor:pointer;color:#5a4a70;transition:all 0.12s;}
+.sug{font-size:11px;padding:5px 11px;border-radius:999px;border:1px solid var(--border);background:var(--surface);cursor:pointer;color:#5a4a70;}
 .sug:hover{border-color:var(--accent1);color:var(--accent1);}
 .agent-input-row{display:flex;gap:8px;padding:12px 14px;border-top:1px solid var(--border);background:var(--card);}
 .agent-input{flex:1;background:var(--surface);border:1px solid var(--border2);border-radius:8px;padding:8px 12px;font-size:12px;color:var(--text);outline:none;}
@@ -138,7 +138,7 @@ button{cursor:pointer;}button:active{transform:scale(0.98);}
 </style>
 </head>
 <body>
-<div class="app" id="app">
+<div class="app">
   <div id="setup-screen" style="display:block;">
     <div class="topbar">
       <div class="logo">
@@ -149,7 +149,7 @@ button{cursor:pointer;}button:active{transform:scale(0.98);}
     <div class="setup">
       <div class="logo-icon" style="width:52px;height:52px;font-size:22px;border-radius:14px;">R</div>
       <h2>Connect your database</h2>
-      <p>Paste your Supabase credentials below to connect your CRM. Your leads will be saved permanently and sync across all your devices.</p>
+      <p>Paste your Supabase credentials below to connect your CRM.</p>
       <div class="setup-form">
         <input id="setup-url" type="text" placeholder="Supabase Project URL (https://xxx.supabase.co)">
         <input id="setup-key" type="text" placeholder="Supabase Anon Key">
@@ -180,7 +180,7 @@ button{cursor:pointer;}button:active{transform:scale(0.98);}
     <div class="status-bar">
       <div class="status-dot" id="statusDot"></div>
       <span id="statusText">Connecting...</span>
-      <span style="margin-left:auto;cursor:pointer;color:var(--text3);" onclick="resetConfig()">⚙ Reset connection</span>
+      <span style="margin-left:auto;cursor:pointer;color:var(--text3);" onclick="doResetConfig()">⚙ Reset connection</span>
     </div>
     <div class="tabs">
       <button class="tab active" onclick="switchTab('crm',this)">Pipeline CRM</button>
@@ -233,7 +233,7 @@ button{cursor:pointer;}button:active{transform:scale(0.98);}
     <div class="field"><label>Temperature</label>
       <select id="f-temp"><option value="cold">Cold</option><option value="warm">Warm</option><option value="hot">Hot</option></select>
     </div>
-    <div class="field"><label>Notes</label><textarea id="f-notes" placeholder="Any context about this brand..."></textarea></div>
+    <div class="field"><label>Notes</label><textarea id="f-notes" placeholder="Any context..."></textarea></div>
     <div class="modal-actions">
       <button class="btn-cancel" onclick="closeModal('addModal')">Cancel</button>
       <button class="btn-save" onclick="submitAddLead()">Add lead</button>
@@ -251,7 +251,7 @@ button{cursor:pointer;}button:active{transform:scale(0.98);}
     <div class="move-label">Move to stage</div>
     <div class="move-btns" id="d-move"></div>
     <div class="modal-actions" style="margin-top:14px;">
-      <button class="del-btn" onclick="deleteLead()">Delete lead</button>
+      <button class="del-btn" onclick="doDeleteLead()">Delete lead</button>
       <button class="btn-cancel" onclick="closeModal('detailModal')">Close</button>
     </div>
   </div>
@@ -261,15 +261,18 @@ button{cursor:pointer;}button:active{transform:scale(0.98);}
 const STAGES=['prospecting','contacted','replied','closed'];
 const SLABELS={prospecting:'Prospecting',contacted:'Contacted',replied:'Replied',closed:'Closed'};
 const ME={name:'Ryan Ahmed-Yahia',email:'ryanhasit9@gmail.com',tt:'@findingdealsusa',ig:'@1.hanniba1',portfolio:'https://canva.link/emcie7p9eu2em4k'};
-let supabase=null,leads=[],selectedId=null,agentHistory=[],isThinking=false;
+
+let sbClient=null,leads=[],selectedId=null,agentHistory=[],isThinking=false;
 
 function saveConfig(){
   const url=document.getElementById('setup-url').value.trim();
   const key=document.getElementById('setup-key').value.trim();
   if(!url||!key){alert('Please fill in both fields.');return;}
-  localStorage.setItem('sb_url',url);localStorage.setItem('sb_key',key);initApp();}
+  localStorage.setItem('sb_url',url);
+  localStorage.setItem('sb_key',key);
+  initApp();}
 
-function resetConfig(){
+function doResetConfig(){
   if(!confirm('Reset connection?'))return;
   localStorage.removeItem('sb_url');localStorage.removeItem('sb_key');location.reload();}
 
@@ -278,19 +281,22 @@ async function initApp(){
   const key=localStorage.getItem('sb_key');
   if(!url||!key){
     document.getElementById('setup-screen').style.display='block';
-    document.getElementById('main-screen').style.display='none';return;}
+    document.getElementById('main-screen').style.display='none';
+    return;}
   document.getElementById('setup-screen').style.display='none';
   document.getElementById('main-screen').style.display='block';
   setStatus('loading','Connecting...');
   try{
-    supabase=window.supabase.createClient(url,key);
+    sbClient=window.supabase.createClient(url,key);
     await loadLeads();
     setStatus('ok','Connected — data syncing live');
-  }catch(e){setStatus('error','Connection failed — check your credentials');console.error(e);}}
+  }catch(e){
+    setStatus('error','Connection failed: '+e.message);
+    alert('Connection error: '+e.message);}}
 
 async function loadLeads(){
-  const {data,error}=await supabase.from('leads').select('*').order('created_at',{ascending:false});
-  if(error){console.error(error);return;}
+  const {data,error}=await sbClient.from('leads').select('*').order('created_at',{ascending:false});
+  if(error)throw error;
   leads=data||[];render();}
 
 function setStatus(type,msg){
@@ -303,19 +309,19 @@ async function submitAddLead(){
   closeModal('addModal');}
 
 async function saveLead(data){
-  if(supabase){
-    const {data:row,error}=await supabase.from('leads').insert([data]).select().single();
+  if(sbClient){
+    const {data:row,error}=await sbClient.from('leads').insert([data]).select().single();
     if(!error&&row){leads.unshift(row);render();return row;}}
   const row={...data,id:Date.now(),created_at:new Date().toISOString()};
   leads.unshift(row);render();return row;}
 
 async function updateLeadStage(id,stage){
   leads=leads.map(l=>l.id===id?{...l,stage}:l);render();
-  if(supabase)await supabase.from('leads').update({stage}).eq('id',id);}
+  if(sbClient)await sbClient.from('leads').update({stage}).eq('id',id);}
 
 async function deleteLeadById(id){
   leads=leads.filter(l=>l.id!==id);render();
-  if(supabase)await supabase.from('leads').delete().eq('id',id);}
+  if(sbClient)await sbClient.from('leads').delete().eq('id',id);}
 
 function genMsg(l){return `Hi ${l.brand} team!\n\nMy name is Ryan, a UGC creator specializing in ${l.niche} content. I love what you're building and would love to create authentic, high-converting content for you.\n\nMy work:\n→ TikTok: ${ME.tt}\n→ Instagram: ${ME.ig}\n→ Portfolio: ${ME.portfolio}\n\nLet's connect! Reach me at ${ME.email}.\n\nLooking forward to it,\nRyan`;}
 
@@ -342,10 +348,12 @@ function renderBoard(){
       </div></div>`;}).join('');}
 
 function render(){renderMetrics();renderBoard();}
+
 function switchTab(tab,btn){
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));btn.classList.add('active');
   document.getElementById('tab-crm').style.display=tab==='crm'?'block':'none';
   document.getElementById('tab-agent').style.display=tab==='agent'?'block':'none';}
+
 function openAddModal(){openAddModalStage('prospecting');}
 function openAddModalStage(stage){
   ['f-brand','f-niche','f-contact','f-notes'].forEach(id=>document.getElementById(id).value='');
@@ -368,22 +376,26 @@ function openDetail(id){
   document.getElementById('detailModal').classList.add('open');}
 
 async function moveLeadTo(stage){await updateLeadStage(selectedId,stage);closeModal('detailModal');}
-async function deleteLead(){if(!confirm('Delete this lead?'))return;await deleteLeadById(selectedId);closeModal('detailModal');}
+async function doDeleteLead(){if(!confirm('Delete this lead?'))return;await deleteLeadById(selectedId);closeModal('detailModal');}
+
 function copyOutreach(){
   navigator.clipboard.writeText(document.getElementById('d-outreach').textContent).then(()=>{
     const b=document.querySelector('.copy-btn');b.textContent='Copied!';setTimeout(()=>b.textContent='Copy message',2000);});}
 
 function useSug(el){document.getElementById('agentInput').value=el.textContent;document.getElementById('sugs').style.display='none';sendMsg();}
+
 function appendMsg(role,content){
   const msgs=document.getElementById('agentMsgs');const div=document.createElement('div');
   div.className=`msg ${role}`;
   div.innerHTML=`<div class="msg-label">${role==='user'?'You':'Lead Scout'}</div><div class="bubble">${content}</div>`;
   msgs.appendChild(div);msgs.scrollTop=msgs.scrollHeight;}
+
 function appendTyping(){
   const msgs=document.getElementById('agentMsgs');const div=document.createElement('div');
   div.className='msg agent';div.id='typing-ind';
   div.innerHTML=`<div class="msg-label">Lead Scout</div><div class="typing"><div class="dot-pulse"><span></span><span></span><span></span></div></div>`;
   msgs.appendChild(div);msgs.scrollTop=msgs.scrollHeight;}
+
 function removeTyping(){const t=document.getElementById('typing-ind');if(t)t.remove();}
 
 function renderLeadCards(arr){
@@ -406,6 +418,7 @@ async function addFromAgent(encoded,btn){
   const data=JSON.parse(decodeURIComponent(encoded));
   await saveLead({brand:data.brand,niche:data.niche,contact:data.contact||'',stage:'prospecting',temp:'cold',notes:data.notes||''});
   btn.textContent='Added!';btn.disabled=true;}
+
 function copyMsgFromAgent(encoded,btn){
   navigator.clipboard.writeText(decodeURIComponent(encoded)).then(()=>{btn.textContent='Copied!';setTimeout(()=>btn.textContent='Copy pitch',2000);});}
 
@@ -429,7 +442,7 @@ async function sendMsg(){
       if(parts[0].trim())appendMsg('agent',parts[0].trim());
       try{renderLeadCards(JSON.parse(parts[1].trim()));}catch(e){appendMsg('agent',text);}
     }else{appendMsg('agent',text||'Something went wrong. Try again!');}
-  }catch(e){removeTyping();appendMsg('agent','Connection error. Please try again.');}
+  }catch(e){removeTyping();appendMsg('agent','Connection error: '+e.message);}
   isThinking=false;document.getElementById('sendBtn').disabled=false;}
 
 initApp();
